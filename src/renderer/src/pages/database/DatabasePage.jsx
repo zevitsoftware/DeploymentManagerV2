@@ -68,7 +68,7 @@ function ConnectionFormModal({ conn, onSave, onClose }) {
           {isMongo && (
             <div>
               <label className="block text-xs font-medium text-text-muted mb-1">Connection URI <span className="text-text-dim">(overrides host/port)</span></label>
-              <input value={form.uri??''} placeholder="mongodb+srv://user:pass@cluster.mongodb.net/db" onChange={e=>f('uri',e.target.value)}
+              <input value={form.uri??''} placeholder="mongodb+srv://<user>:<password>@<cluster-host>/<database>" onChange={e=>f('uri',e.target.value)}
                 className="w-full bg-bg-primary border border-border-base rounded-md px-3 py-2 text-sm text-text-primary focus:border-border-focus outline-none placeholder:text-text-dim font-mono text-xs"/>
             </div>
           )}
