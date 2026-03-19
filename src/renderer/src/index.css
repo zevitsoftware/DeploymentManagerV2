@@ -1,0 +1,182 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── CSS Custom Properties (Design Tokens) ─────────────────────────────── */
+:root {
+  --bg-primary:       #0b0e11;
+  --bg-secondary:     #181a20;
+  --bg-surface:       #1e2329;
+  --bg-hover:         #2b3139;
+  --border:           #2b3139;
+  --border-focus:     #474d57;
+  --text-primary:     #eaecef;
+  --text-muted:       #848e9c;
+  --text-dim:         #5e6673;
+  --accent-firewall:  #f6465d;
+  --accent-deploy:    #0ecb81;
+  --accent-database:  #f0b90b;
+  --accent-cf:        #f6821f;
+  --success:          #0ecb81;
+  --warning:          #f0b90b;
+  --error:            #f6465d;
+  --info:             #1e9cf4;
+  --sidebar-width:    64px;
+  --topbar-height:    40px;
+}
+
+/* ─── Base Reset ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ─── Custom Scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2b3139; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #474d57; }
+
+/* ─── Text selectable in inputs ──────────────────────────────────────────── */
+input, textarea, [contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ─── App Layout ─────────────────────────────────────────────────────────── */
+.app-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.app-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+/* ─── Titlebar drag region ───────────────────────────────────────────────── */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* ─── Resizable Divider ──────────────────────────────────────────────────── */
+.resize-divider {
+  width: 4px;
+  background: var(--border);
+  cursor: col-resize;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  position: relative;
+}
+.resize-divider:hover,
+.resize-divider.dragging {
+  background: var(--border-focus);
+}
+.resize-divider-h {
+  height: 4px;
+  width: 100%;
+  background: var(--border);
+  cursor: row-resize;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.resize-divider-h:hover,
+.resize-divider-h.dragging {
+  background: var(--border-focus);
+}
+
+/* ─── Table Styles ───────────────────────────────────────────────────────── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.data-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(43,49,57,0.5);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.data-table tbody tr:hover td {
+  background: var(--bg-hover);
+}
+.data-table tbody tr.selected td {
+  background: rgba(240,185,11,0.08);
+}
+
+/* ─── Panel common ───────────────────────────────────────────────────────── */
+.panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+}
+
+/* ─── Badge base ─────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/* ─── Shimmer loading ────────────────────────────────────────────────────── */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface) 25%,
+    var(--bg-hover) 50%,
+    var(--bg-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* ─── Transitions ────────────────────────────────────────────────────────── */
+.transition-base {
+  transition: all 0.15s ease;
+}
+
+/* ─── Terminal bg ────────────────────────────────────────────────────────── */
+.terminal-bg {
+  background: #0b0e11;
+}

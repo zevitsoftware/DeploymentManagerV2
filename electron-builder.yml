@@ -1,0 +1,76 @@
+appId: com.zevitsoft.deployment-manager
+productName: Zevitsoft Deployment Manager
+copyright: Copyright © 2024 Zevitsoft
+
+directories:
+  buildResources: resources
+  output: dist
+
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!scripts/**'
+  - '!ProgressReport/**'
+  - '!*.md'
+
+asarUnpack:
+  - resources/**
+
+# ── Windows ───────────────────────────────────────────────────────────────────
+win:
+  icon: resources/icon.png
+  executableName: ZevitsoftDeploymentManager
+  target:
+    - target: portable
+      arch: x64
+    - target: nsis
+      arch: x64
+
+nsis:
+  artifactName: ZevitsoftDeploymentManager-${version}-Setup.${ext}
+  shortcutName: Zevitsoft Deployment Manager
+  uninstallDisplayName: Zevitsoft Deployment Manager
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+portable:
+  artifactName: ZevitsoftDeploymentManager-${version}-Portable.${ext}
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+mac:
+  icon: resources/icon.icns
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSCameraUsageDescription: Application requests access to the device's camera.
+    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  notarize: false
+
+dmg:
+  artifactName: ZevitsoftDeploymentManager-${version}.${ext}
+
+# ── Linux ─────────────────────────────────────────────────────────────────────
+linux:
+  icon: resources/icon.png
+  target:
+    - AppImage
+    - deb
+  maintainer: Zevitsoft <support@zevitsoft.com>
+  category: Utility
+
+appImage:
+  artifactName: ZevitsoftDeploymentManager-${version}.${ext}
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+npmRebuild: false
+asar: true
+
+publish:
+  provider: generic
+  url: https://releases.zevitsoft.com/deployment-manager
