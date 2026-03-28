@@ -168,10 +168,10 @@ function LogPanel({ lines, onClear, onUpdateAll, isUpdating, selectedCount }) {
 export default function FirewallPage() {
   const {
     targets, interfaces, logLines,
-    selectedIds, isUpdating,
+    selectedIds, isUpdating, customIps,
     loadTargets, refreshIPs, updateAllFirewalls, clearLog,
     addTarget, updateTarget, deleteTarget,
-    toggleSelect, selectAll, clearSelection,
+    toggleSelect, selectAll, clearSelection, setCustomIps,
   } = useFirewallStore()
 
   const [showIPs, setShowIPs] = useState(true)
@@ -226,6 +226,19 @@ export default function FirewallPage() {
             onRefresh={handleRefreshIPs}
             isRefreshing={isRefreshingIPs}
           />
+
+          <div className="border-t border-border-base pt-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-text-dim mb-2">Custom IPs</div>
+            <textarea
+              value={customIps}
+              onChange={(e) => setCustomIps(e.target.value)}
+              placeholder="e.g. 1.2.3.4, 5.6.7.8"
+              className="w-full bg-bg-primary border border-border-base rounded-md px-2 py-1.5 text-xs font-mono text-text-primary focus:border-border-focus outline-none placeholder:text-text-dim placeholder:font-sans resize-y min-h-[60px]"
+            />
+            <p className="text-[10px] text-text-muted mt-1 leading-tight">
+              Comma-separated. These will be added alongside your auto-detected public IPs.
+            </p>
+          </div>
 
           <div className="border-t border-border-base pt-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-text-dim mb-2">Quick Stats</div>

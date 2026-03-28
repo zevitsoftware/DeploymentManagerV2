@@ -8,12 +8,18 @@ const useFirewallStore = create((set, get) => ({
   // ─── State ───────────────────────────────────────────────────────────────
   targets:    [],
   interfaces: [],
+  customIps:  localStorage.getItem('firewall_custom_ips') || '',
   logLines:   [],
   selectedIds: [],
   isUpdating:  false,
   isLoading:   false,
 
   // ─── Actions ─────────────────────────────────────────────────────────────
+
+  setCustomIps: (val) => {
+    localStorage.setItem('firewall_custom_ips', val)
+    set({ customIps: val })
+  },
 
   loadTargets: async () => {
     try {
@@ -66,7 +72,7 @@ const useFirewallStore = create((set, get) => ({
   },
 
   updateAllFirewalls: async () => {
-    const { targets, selectedIds, interfaces, appendLog, clearLog, saveTargets: save } = get()
+    const { targets, selectedIds, interfaces, customIps, appendLog, clearLog, saveTargets: save } = get()
     clearLog()
     set({ isUpdating: true })
 
@@ -89,9 +95,12 @@ const useFirewallStore = create((set, get) => ({
     const label = selectedIds.length > 0 ? `${toUpdate.length} selected target(s)` : `${toUpdate.length} enabled target(s)`
     appendLog({ ts: new Date().toLocaleTimeString(), type: 'info', text: `Starting firewall update for ${label}…` })
 
-    const ips = interfaces.map(i => i.publicIp).filter(ip => ip && ip !== '—')
+    const autoIps = interfaces.map(i => i.publicIp).filter(ip => ip && ip !== '—')
+    const parsedCustomIps = customIps.split(',').map(s => s.trim()).filter(Boolean)
+    const ips = [...new Set([...autoIps, ...parsedCustomIps])]
+
     if (ips.length === 0) {
-      appendLog({ ts: new Date().toLocaleTimeString(), type: 'warning', text: '⚠ No public IPs detected. Refresh IPs first.' })
+      appendLog({ ts: new Date().toLocaleTimeString(), type: 'warning', text: '⚠ No public IPs or custom IPs detected. Refresh IPs first or add custom IPs.' })
       set({ isUpdating: false })
       return
     }
