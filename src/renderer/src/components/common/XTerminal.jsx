@@ -124,6 +124,24 @@ const XTerminal = forwardRef(function XTerminal({ className = '', style = {}, on
 
     onReady?.(term)
 
+    // Handle Ctrl+C (copy) and Ctrl+V (paste) native bindings
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type === 'keydown' && e.ctrlKey) {
+        if (e.code === 'KeyC' && term.hasSelection()) {
+          navigator.clipboard.writeText(term.getSelection())
+          term.clearSelection()
+          return false
+        }
+        if (e.code === 'KeyV') {
+          navigator.clipboard.readText().then(text => {
+            onDataRef.current?.(text)
+          })
+          return false
+        }
+      }
+      return true
+    })
+
     // Wire user keystrokes → callback (for SSH input)
     const dataDisposable = term.onData((data) => {
       onDataRef.current?.(data)

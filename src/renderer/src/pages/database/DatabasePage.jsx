@@ -12,7 +12,7 @@ import { DB_TYPES } from '../../lib/constants'
 import {
   Database, Plus, Trash2, TestTube, RefreshCw, Pencil,
   ChevronDown, ChevronRight, Bot, Send, X, Lock, Copy, Check,
-  HardDrive, Settings, Globe, AlertTriangle, Play
+  HardDrive, Settings, Globe, AlertTriangle, Play, Plug
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
@@ -650,7 +650,7 @@ export default function DatabasePage() {
     connections, selectedConnId, schema, selectedTable, lastDiagnostics,
     activeTab, chatMessages, chatInput, isChatLoading, queryText, queryResult, isRunningQuery,
     isAiAnalyzing, aiAnalysisResult, isRunningDiagnostics, backupDir, isRunningBackup, backupLog,
-    loadConnections, selectConnection, selectTable, setActiveTab,
+    loadConnections, selectConnId, selectConnection, selectTable, setActiveTab,
     testConnection, fetchSchema, runDiagnostics, runAiAnalysis,
     sendChatMessage, setChatInput, setQueryText, runQuery,
     saveConnection, deleteConnection, runBackup, setBackupDir,
@@ -659,6 +659,7 @@ export default function DatabasePage() {
   const [connModal, setConnModal] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [connFilter, setConnFilter] = useState('')
+  const [connectingId, setConnectingId] = useState(null)
   const [dataBrowser, setDataBrowser] = useState(null) // { tableName }
   const [aiCopied, setAiCopied] = useState(false)
   const [showCliTools, setShowCliTools] = useState(false)
@@ -669,6 +670,16 @@ export default function DatabasePage() {
       navigator.clipboard.writeText(aiAnalysisResult.analysis)
       setAiCopied(true)
       setTimeout(()=>setAiCopied(false), 1500)
+    }
+  }
+
+  const handleConnect = async (connId) => {
+    setConnectingId(connId)
+    try {
+      selectConnId(connId)
+      await selectConnection(connId)
+    } finally {
+      setConnectingId(null)
     }
   }
 
@@ -738,7 +749,7 @@ export default function DatabasePage() {
                 className={cn('relative flex flex-col px-3 py-2 cursor-pointer group transition-all',
                   isSel ? 'bg-indigo-500/10 border-l-2 border-accent-database' : 'hover:bg-bg-hover/60 border-l-2 border-transparent'
                 )}
-                onClick={()=>selectConnection(conn.id)}>
+                onClick={()=>selectConnId(conn.id)}>
                 <div className="flex items-center gap-2">
                   <div className="relative flex-shrink-0">
                     <span className="text-base leading-none">{dtype?.icon}</span>
@@ -753,6 +764,17 @@ export default function DatabasePage() {
                       <span className="text-[8px] px-1 py-px rounded font-medium" style={{ background: dtype?.bg, color: dtype?.color }}>{dtype?.label}</span>
                     </div>
                   </div>
+                </div>
+                {/* Bottom row: Connect button — shown on hover, only when not connected */}
+                <div className="mt-1.5 hidden group-hover:flex items-center">
+                  {!isConnected && (
+                    <button
+                      onClick={e=>{e.stopPropagation();handleConnect(conn.id)}}
+                      disabled={connectingId === conn.id}
+                      className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded border border-green-500/40 text-green-400 hover:bg-green-500/10 transition-colors disabled:opacity-50">
+                      {connectingId === conn.id ? 'Connecting…' : <><Plug size={9}/>Connect</>}
+                    </button>
+                  )}
                 </div>
                 {/* Edit / Delete actions — shown on hover */}
                 <div className="absolute right-1.5 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-0.5 bg-bg-surface border border-border-base rounded-md shadow-sm">

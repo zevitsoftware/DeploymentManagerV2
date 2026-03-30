@@ -793,7 +793,7 @@ function ProjectFormModal({ serverId, project, server, onSave, onClose }) {
 function ServerTree({ servers, connectedServers, selectedServerId, selectedProjectId,
   onEditProject, onDeleteProject,
   onSelectServer, onSelectProject, onEditServer, onDeleteServer, onAddServer, onAddProject, onConnect, onDisconnect }) {
-  const [expanded, setExpanded] = useState(Object.fromEntries(servers.map(s => [s.id, true])))
+  const [expanded, setExpanded] = useState(Object.fromEntries(servers.map(s => [s.id, false])))
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-base flex-shrink-0">
@@ -811,7 +811,7 @@ function ServerTree({ servers, connectedServers, selectedServerId, selectedProje
         {servers.map(server => {
           const isConn = connectedServers.has(server.id)
           const isSel = selectedServerId === server.id
-          const isExp = expanded[server.id] ?? true
+          const isExp = expanded[server.id] ?? false
           return (
             <div key={server.id}>
               <div className={cn('flex items-center gap-2 px-3 py-2 cursor-pointer group transition-colors hover:bg-bg-hover/60', isSel && 'bg-bg-hover border-l-2 border-accent-deploy')}

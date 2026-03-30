@@ -41,11 +41,34 @@ const useDatabaseStore = create((set, get) => ({
     try {
       const connections = await api().db.getConnections()
       set({ connections: connections ?? [] })
-      const firstId = connections?.[0]?.id ?? null
-      if (firstId) await get().selectConnection(firstId)
     } catch (err) {
       toast.error('Failed to load connections: ' + err.message)
     }
+  },
+
+  // Just selects the connection — does NOT connect
+  selectConnId: (id) => {
+    const conn = get().connections.find(c => c.id === id)
+    const isAlreadyConnected = conn?.status === 'connected' || conn?.status === 'online'
+    const dbType = conn?.type ?? 'mysql'
+    const defaultQuery = dbType === 'mongodb'
+      ? 'db.collection.find({}).limit(10)'
+      : dbType === 'redis'
+        ? 'KEYS *'
+        : 'SELECT * FROM users LIMIT 10;'
+
+    set({
+      selectedConnId: id,
+      schema: isAlreadyConnected ? get().schema : null,
+      selectedTable: isAlreadyConnected ? get().selectedTable : null,
+      chatMessages: isAlreadyConnected ? get().chatMessages : [],
+      chatInput: isAlreadyConnected ? get().chatInput : '',
+      isChatLoading: false,
+      queryText: defaultQuery,
+      queryResult: isAlreadyConnected ? get().queryResult : null,
+      lastDiagnostics: isAlreadyConnected ? get().lastDiagnostics : null,
+      aiAnalysisResult: isAlreadyConnected ? get().aiAnalysisResult : null,
+    })
   },
 
   selectConnection: async (id) => {

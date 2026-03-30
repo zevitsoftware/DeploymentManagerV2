@@ -63,7 +63,7 @@ function createWindow() {
     // ── Set global paths (configStore & authHandlers read from these) ──────────
     const appDir = app.isPackaged
         ? (process.env.PORTABLE_EXECUTABLE_DIR || dirname(process.execPath))
-        : join(__dirname, '../../..')
+        : join(__dirname, '../..')
     global.APP_DIR     = appDir
     global.CONFIG_PATH = join(appDir, 'targets.enc')
     WINDOW_STATE_PATH  = join(appDir, 'window-state.json')

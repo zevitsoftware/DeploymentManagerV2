@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import useAuthStore from '../../stores/useAuthStore'
 import { toast } from '../../stores/useAppStore'
 import { LoadingSpinner } from '../../components/common/LoadingSpinner'
 import { AI_MODES, AI_MODELS } from '../../lib/constants'
 import {
   User, Bot, Key, ChevronDown, ChevronRight, CheckCircle2,
-  AlertCircle, Plus, Trash2, Eye, EyeOff, TestTube
+  AlertCircle, Plus, Trash2, Eye, EyeOff, TestTube, Github
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
@@ -188,6 +188,61 @@ function AiConfigSection({ aiConfig, onSave, onTest }) {
   )
 }
 
+function GitConfigSection() {
+  const [open, setOpen] = useState(true)
+  const [form, setForm] = useState({ username: '', token: '' })
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    window.api.deploy.getGitConfig().then(res => {
+      if (res) setForm(res)
+    })
+  }, [])
+
+  const handleSave = async () => {
+    setIsLoading(true)
+    try {
+      const res = await window.api.deploy.saveGitConfig(form)
+      if (res.ok) toast.success('Git config saved')
+      else toast.error(res?.error ?? 'Failed to save git config')
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div>
+      <SectionHeader icon={Github} label="Git Configuration" open={open} onToggle={()=>setOpen(o=>!o)}/>
+      {open && (
+        <div className="py-4 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-text-muted mb-1.5">Git Username</label>
+            <input type="text" value={form.username} onChange={e=>setForm(f=>({...f,username:e.target.value}))}
+              placeholder="e.g. johndoe"
+              className="w-full bg-bg-primary border border-border-base rounded-md px-3 py-2 text-sm text-text-primary focus:border-border-focus outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-text-muted mb-1.5">Personal Access Token (PAT)</label>
+            <ApiKeyInput value={form.token} label="Git Token" placeholder="ghp_..."
+               onChange={v=>setForm(f=>({...f,token:v}))}
+               onDelete={()=>setForm(f=>({...f,token:''}))} />
+            <p className="text-[10px] text-text-dim mt-1.5">Used for reading remote branches and committing during deployment.</p>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button onClick={handleSave} disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-2 text-xs bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg font-medium transition-colors">
+              Save Config
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 export default function SettingsPage() {
   const { user, isLoading, aiConfig, login, logout, saveAiConfig, testAi } = useAuthStore()
 
@@ -203,6 +258,9 @@ export default function SettingsPage() {
           <GcpAuthSection user={user} onLogin={login} onLogout={logout} isLoading={isLoading}/>
           <div className="pt-2">
             <AiConfigSection aiConfig={aiConfig} onSave={saveAiConfig} onTest={testAi}/>
+          </div>
+          <div className="pt-2">
+            <GitConfigSection />
           </div>
         </div>
 
