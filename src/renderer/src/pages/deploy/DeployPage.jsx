@@ -1872,12 +1872,21 @@ export default function DeployPage() {
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Tab bar */}
           <div className="flex items-center gap-1 px-3 py-2 border-b border-border-base bg-bg-surface/60 flex-shrink-0">
-            {TABS.map(t => (
-              <button key={t.id} onClick={() => setActiveTab(t.id)}
-                className={cn('px-3 py-1 text-xs font-medium rounded-md transition-colors', activeTab === t.id ? 'bg-accent-deploy/20 text-accent-deploy' : 'text-text-muted hover:text-text-primary hover:bg-bg-hover')}>
-                {t.label}
-              </button>
-            ))}
+            {TABS.map(t => {
+              const isDisabled = t.id === 'deploy' && !selectedProject;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => !isDisabled && setActiveTab(t.id)}
+                  disabled={isDisabled}
+                  className={cn('px-3 py-1 text-xs font-medium rounded-md transition-colors',
+                    activeTab === t.id && !isDisabled ? 'bg-accent-deploy/20 text-accent-deploy' : 'text-text-muted',
+                    isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:text-text-primary hover:bg-bg-hover'
+                  )}>
+                  {t.label}
+                </button>
+              )
+            })}
             <span className={cn('ml-auto text-xs flex items-center gap-1', isConnected ? 'text-accent-deploy' : 'text-yellow-400')}>
               {isConnected ? <><Wifi size={11} />Connected</> : <><WifiOff size={11} />Not connected</>}
             </span>

@@ -13,9 +13,33 @@
 
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join, dirname } from 'path'
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+
+// ── Early crash logging ───────────────────────────────────────────────────────
+// Written to a file beside the executable so crashes are diagnosable without
+// DevTools or a log console (critical for packaged / portable mode).
+function logCrash(label, err) {
+    try {
+        const logDir = process.env.PORTABLE_EXECUTABLE_DIR
+            || dirname(process.execPath)
+            || dirname(process.argv[0])
+        const logFile = join(logDir, 'crash.log')
+        const line = `[${new Date().toISOString()}] ${label}: ${err?.stack || err}\n`
+        appendFileSync(logFile, line)
+    } catch { /* silently ignore if even logging fails */ }
+}
+
+process.on('uncaughtException', (err) => {
+    logCrash('uncaughtException', err)
+    process.exit(1)
+})
+
+process.on('unhandledRejection', (reason) => {
+    logCrash('unhandledRejection', reason)
+    process.exit(1)
+})
 
 // ── IPC Orchestrators ─────────────────────────────────────────────────────────
 // electron-vite uses Rollup to bundle the main process. Rollup has built-in
@@ -36,6 +60,36 @@ const sshManager          = _req('./services/sshManager')
 
 // ── Window State Persistence ──────────────────────────────────────────────────
 let WINDOW_STATE_PATH = null
+
+function configureAppPaths() {
+    const appDir = app.isPackaged
+        ? (process.env.PORTABLE_EXECUTABLE_DIR || dirname(process.execPath))
+        : join(__dirname, '../..')
+
+    if (app.isPackaged) {
+        const portableDataDir = join(appDir, '.portable-data')
+        const userDataDir = join(portableDataDir, 'userData')
+        const sessionDataDir = join(portableDataDir, 'sessionData')
+        const crashDumpsDir = join(portableDataDir, 'crashDumps')
+        const logsDir = join(portableDataDir, 'logs')
+
+        for (const dir of [portableDataDir, userDataDir, sessionDataDir, crashDumpsDir, logsDir]) {
+            try {
+                mkdirSync(dir, { recursive: true })
+            } catch { /* ignore and let Electron surface any real runtime issue */ }
+        }
+
+        // Keep packaged/portable data in a known writable location beside the executable.
+        app.setPath('userData', userDataDir)
+        app.setPath('sessionData', sessionDataDir)
+        app.setPath('crashDumps', crashDumpsDir)
+        app.setAppLogsPath(logsDir)
+    }
+
+    global.APP_DIR = appDir
+    global.CONFIG_PATH = join(appDir, 'targets.enc')
+    WINDOW_STATE_PATH = join(appDir, 'window-state.json')
+}
 
 function loadWindowState() {
     try {
@@ -60,13 +114,9 @@ function saveWindowState(win) {
 // ── Window Factory ────────────────────────────────────────────────────────────
 
 function createWindow() {
-    // ── Set global paths (configStore & authHandlers read from these) ──────────
-    const appDir = app.isPackaged
-        ? (process.env.PORTABLE_EXECUTABLE_DIR || dirname(process.execPath))
-        : join(__dirname, '../..')
-    global.APP_DIR     = appDir
-    global.CONFIG_PATH = join(appDir, 'targets.enc')
-    WINDOW_STATE_PATH  = join(appDir, 'window-state.json')
+    // NOTE: configureAppPaths() is NOT called here — it MUST run before
+    // app.whenReady() (at module level below) so app.setPath() takes effect
+    // before Electron initialises default userData/sessionData paths.
 
     // Restore saved window bounds or use defaults
     const saved = loadWindowState()
@@ -159,7 +209,21 @@ function createWindow() {
     return mainWindow
 }
 
+// ── Portable-mode sandbox workaround ─────────────────────────────────────────
+// When the portable NSIS stub extracts into %TEMP%, the Chromium GPU sandbox
+// blocks child-process spawning causing the GPU process to crash with
+// 0x80000003 (EXCEPTION_BREAKPOINT). Disabling the GPU sandbox for portable
+// builds only lets the GPU process start normally from the temp path.
+if (process.env.PORTABLE_EXECUTABLE_DIR) {
+    app.commandLine.appendSwitch('disable-gpu-sandbox')
+}
+
 // ── App Lifecycle ─────────────────────────────────────────────────────────────
+// configureAppPaths() MUST run here (before app.whenReady()) so that
+// app.setPath('userData', ...) takes effect before Electron/Chromium
+// initialises default profile paths. Calling setPath() after ready is
+// deprecated in Electron 36+ and silently ignored in newer releases.
+configureAppPaths()
 
 app.whenReady().then(() => {
     // Set Windows app user model ID (taskbar grouping)

@@ -42,7 +42,7 @@ const useDeployStore = create((set, get) => ({
       set({
         servers: servers ?? [],
         selectedServerId: firstId,
-        selectedProjectId: servers?.[0]?.projects?.[0]?.id ?? null,
+        selectedProjectId: null,
       })
     } catch (err) {
       toast.error('Failed to load servers: ' + err.message)
@@ -50,8 +50,11 @@ const useDeployStore = create((set, get) => ({
   },
 
   selectServer: (id) => {
-    const server = get().servers.find(s => s.id === id)
-    set({ selectedServerId: id, selectedProjectId: server?.projects?.[0]?.id ?? null })
+    if (get().selectedServerId !== id) {
+      set({ selectedServerId: id, selectedProjectId: null })
+    } else {
+      set({ selectedServerId: id, selectedProjectId: null })
+    }
   },
   selectProject: (id) => set({ selectedProjectId: id }),
 
@@ -89,11 +92,12 @@ const useDeployStore = create((set, get) => ({
   },
 
   runDeploy: async (projectId, options = {}) => {
-    const { selectedServerId, appendDeployLog, clearDeployLog } = get()
+    const { servers, selectedServerId, selectedProjectId, appendDeployLog, clearDeployLog } = get()
     if (!selectedServerId) return
 
-    // Determine steps based on project type
-    const project = get().selectedProject
+    // Properly compute project instead of relying on state getter
+    const server = servers.find(s => s.id === selectedServerId)
+    const project = server?.projects?.find(p => p.id === projectId)
     const steps   = project?.type === 'static' ? DEPLOY_STEPS_STATIC : DEPLOY_STEPS_PM2
     const statusMap = Object.fromEntries(steps.map(s => [s.id, 'pending']))
     set({ deployInProgress: true, deployStepStatuses: statusMap })
@@ -121,15 +125,32 @@ const useDeployStore = create((set, get) => ({
     })
 
     try {
-      const res = await api().deploy.runDeploy(selectedServerId, projectId, options.skipInstall, options.customCmds)
+      // Frontend correctly passes skipSteps array and customCommands map using string IDs
+      // Backend expects NUMERIC indices (0-7), so we map them back here.
+      const skipStepsStr = options.skipSteps ? Array.from(options.skipSteps) : []
+      const skipSteps = skipStepsStr.map(id => indexMap.indexOf(id)).filter(i => i !== -1)
+      
+      const customCmdsStr = options.customCommands ?? {}
+      const customCmds = {}
+      for (const [id, cmd] of Object.entries(customCmdsStr)) {
+        if (cmd && cmd.trim() !== '') {
+          const idx = indexMap.indexOf(id)
+          if (idx !== -1) customCmds[idx] = cmd
+        }
+      }
+      
+      const res = await api().deploy.runDeploy(selectedServerId, projectId, skipSteps, customCmds)
       if (!res?.ok) {
         appendDeployLog(`\x1b[31m✗ Deploy failed: ${res?.error ?? 'Unknown error'}\x1b[0m`)
       }
     } catch (err) {
       appendDeployLog(`\x1b[31m✗ ${err.message}\x1b[0m`)
     } finally {
-      unsubLog()
-      unsubProg()
+      // Delay unsubscribing from IPC events to prevent dropping final logs/progress due to RPC race conditions
+      setTimeout(() => {
+        unsubLog()
+        unsubProg()
+      }, 1000)
       set({ deployInProgress: false })
     }
   },

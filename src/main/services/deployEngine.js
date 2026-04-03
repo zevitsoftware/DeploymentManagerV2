@@ -148,7 +148,8 @@ function maskToken(line, token) {
  * deployPm2() — 8-step PM2 deployment pipeline.
  */
 async function deployPm2({ serverId, project, git, sshManager, sendLog, sendProgress, isAborted, skipSteps = [], customCommands = {} }) {
-    const token = git?.token ?? '';
+    const token = (git?.token ?? '').trim();
+    const gitUser = (git?.username ?? '').trim();
 
     const log = (line) => sendLog(maskToken(line, token));
     const step = (idx, status, label) => sendProgress(idx, status, label ?? PM2_STEPS[idx]);
@@ -168,7 +169,7 @@ async function deployPm2({ serverId, project, git, sshManager, sendLog, sendProg
     if (!sshManager.isConnected(serverId)) {
         return abort(0, 'Server not connected. Connect to SSH first.');
     }
-    if (!git?.username || !git?.token) {
+    if (!gitUser || !token) {
         return abort(0, 'Git credentials not configured. Set them in ⚙️ Git Config.');
     }
     if (!project?.remotePath || !project?.repo) {
@@ -210,7 +211,9 @@ async function deployPm2({ serverId, project, git, sshManager, sendLog, sendProg
         log(`🔑 package-lock.json hash before pull: ${md5Before}`);
 
         const repo = project.repo.replace(/^https?:\/\//, '');
-        const gitUrl = `https://${git.username}:${token}@${repo}`;
+        const encodedUser = encodeURIComponent(gitUser);
+        const encodedToken = encodeURIComponent(token);
+        const gitUrl = `https://${encodedUser}:${encodedToken}@${repo}`;
         const branch = project.branch || 'main';
         const defaultGitCmdSimple = `git pull origin ${branch}`;
         const defaultGitCmdFull = `git pull "${gitUrl}" "${branch}"`;

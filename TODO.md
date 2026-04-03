@@ -117,3 +117,16 @@
 
 ### ✅ Firewall Tab — Features Implemented This Session
 - [x] **Custom IPs Support** — Added UI and local storage persistence for users to input custom comma-separated IPs alongside auto-detected public IPs. IPs are combined and deduplicated before updating GCP/DO/Atlas target firewalls.
+
+---
+
+## 2026-04-03
+
+### ✅ UI / Deploy Tab
+- [x] **Deploy Tab disabled state** — Disabled the deploy tab button functionality and styling when no project is selected from the server tree.
+- [x] **Server Auto-select Project Fix** — Removed the automatic selection of the first project when clicking on a server in the Sidebar. Now, clicking a server leaves the Selected Project as `null` until the user explicitly clicks a project folder.
+- [x] **Deploy Status Freeze Fix** — Resolved an issue where "Verify Live" remained stuck in pending/running and "Upload to Server" failed to complete by fixing broken Zustand getters affecting the `indexMap` assignment.
+- [x] **IPC Race Condition Fix** — Prevented the final log line and `Complete` status from silently dropping by adding a slight delay in `useDeployStore.js` before unsubscribing from event listeners on successful deploy.
+- [x] **Deploy Skipping Bug Fix** — Properly mapped the string step IDs provided by `DeployStepDialog` (e.g., `upload`) to numeric indices expected by the `DeployEngine.js` backend, enabling successful skipping of individual steps during deployment.
+- [x] **Empty Command Crash Fix** — Fixed a fatal Node.js crash during deploy (`The argument 'file' cannot be empty. Received ''`) caused by empty custom command inputs overriding default build commands. Added a filter to strip empty strings from `customCommands` payload before IPC transfer.
+- [x] **Static Progress Bar Fix** — Removed the extraneous `health_check` ("Verify Live") step from the `DEPLOY_STEPS_STATIC` frontend list, allowing static deploys to correctly reach 100% (4/4 steps) instead of halting at 80% with an eternally pending step.

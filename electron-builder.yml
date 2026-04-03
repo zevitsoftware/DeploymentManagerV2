@@ -18,11 +18,19 @@ files:
 
 asarUnpack:
   - resources/**
+  # Worker JS files must be on real disk — Piscina cannot spawn threads from
+  # inside the .asar VFS. They land in app.asar.unpacked/out/main/workers/
+  - out/main/workers/**
 
 # ── Windows ───────────────────────────────────────────────────────────────────
 win:
   icon: resources/icon.png
   executableName: ZevitsoftDeploymentManager
+  # Code signing is disabled via CSC_IDENTITY_AUTO_DISCOVERY=false in the
+  # build script + forceCodeSigning: false below.
+  # signAndEditExecutable MUST remain true (default) so electron-builder can
+  # embed the asar integrity hash into the exe. Without it, Electron 39+
+  # crashes on startup with exception 0x80000003 (integrity check failure).
   target:
     - target: portable
       arch: x64
@@ -38,6 +46,10 @@ nsis:
 
 portable:
   artifactName: ZevitsoftDeploymentManager-${version}-Portable.${ext}
+  # Run with current user privileges — avoids UAC prompts blocking launch
+  requestExecutionLevel: user
+  # Use a fixed unpack dir name so Windows Defender doesn't flag random temp dirs
+  unpackDirName: ZevitsoftDeploymentManager
 
 # ── macOS ─────────────────────────────────────────────────────────────────────
 mac:
@@ -68,6 +80,8 @@ appImage:
 # ── Misc ──────────────────────────────────────────────────────────────────────
 npmRebuild: false
 asar: true
+# Prevent electron-builder from forcing code signing when no cert is configured
+forceCodeSigning: false
 
 publish:
   provider: generic

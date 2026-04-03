@@ -202,7 +202,11 @@ function GitConfigSection() {
   const handleSave = async () => {
     setIsLoading(true)
     try {
-      const res = await window.api.deploy.saveGitConfig(form)
+      const payload = {
+        username: form.username.trim(),
+        token: form.token.trim()
+      }
+      const res = await window.api.deploy.saveGitConfig(payload)
       if (res.ok) toast.success('Git config saved')
       else toast.error(res?.error ?? 'Failed to save git config')
     } catch (err) {

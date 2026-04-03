@@ -48,7 +48,6 @@ export const DEPLOY_STEPS_STATIC = [
   { id: 'validate',     label: 'Validate Config'      },
   { id: 'npm_build',    label: 'Build Locally'         },
   { id: 'upload',       label: 'Upload to Server'      },
-  { id: 'health_check', label: 'Verify Live'           },
   { id: 'complete',     label: 'Complete'              },
 ]
 
