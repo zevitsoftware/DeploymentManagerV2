@@ -12,6 +12,7 @@ const {
     writeFullConfig,
     getServers,
     getGitConfig,
+    getDoConfig,
     findServer,
 } = require('../../services/configStore');
 
@@ -96,6 +97,15 @@ function deleteProject(serverId, projectId) {
 function saveGitConfig({ username, token }) {
     const config = readFullConfig();
     config.git = { username, token };
+    writeFullConfig(config);
+}
+
+/**
+ * Save DigitalOcean global config (token).
+ */
+function saveDoConfig({ token }) {
+    const config = readFullConfig();
+    config.digitalocean = { token };
     writeFullConfig(config);
 }
 
@@ -190,6 +200,23 @@ function registerHandlers(ipcMain, win, sshManager) {
     ipcMain.handle('deploy:save-git-config', (e, config) => {
         try {
             saveGitConfig(config);
+            return { ok: true };
+        } catch (err) {
+            return { ok: false, error: err.message };
+        }
+    });
+
+    ipcMain.handle('deploy:get-do-config', () => {
+        try {
+            return getDoConfig();
+        } catch {
+            return { token: '' };
+        }
+    });
+
+    ipcMain.handle('deploy:save-do-config', (e, config) => {
+        try {
+            saveDoConfig(config);
             return { ok: true };
         } catch (err) {
             return { ok: false, error: err.message };

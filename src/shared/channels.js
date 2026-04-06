@@ -49,6 +49,8 @@ const DEPLOY_SAVE_PROJECT   = 'deploy:save-project'
 const DEPLOY_DELETE_PROJECT = 'deploy:delete-project'
 const DEPLOY_GET_GIT_CONFIG = 'deploy:get-git-config'
 const DEPLOY_SAVE_GIT_CONFIG = 'deploy:save-git-config'
+const DEPLOY_GET_DO_CONFIG  = 'deploy:get-do-config'
+const DEPLOY_SAVE_DO_CONFIG = 'deploy:save-do-config'
 
 // ─── DEPLOY — SSH CONNECTION (2 channels) ────────────────────────────────────
 const DEPLOY_CONNECT_SERVER    = 'deploy:connect-server'
@@ -216,6 +218,8 @@ module.exports = {
   DEPLOY_DELETE_PROJECT,
   DEPLOY_GET_GIT_CONFIG,
   DEPLOY_SAVE_GIT_CONFIG,
+  DEPLOY_GET_DO_CONFIG,
+  DEPLOY_SAVE_DO_CONFIG,
 
   // Deploy — SSH Connection
   DEPLOY_CONNECT_SERVER,

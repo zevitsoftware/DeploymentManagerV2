@@ -5,7 +5,7 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner'
 import { AI_MODES, AI_MODELS } from '../../lib/constants'
 import {
   User, Bot, Key, ChevronDown, ChevronRight, CheckCircle2,
-  AlertCircle, Plus, Trash2, Eye, EyeOff, TestTube, Github
+  AlertCircle, Plus, Trash2, Eye, EyeOff, TestTube, Github, Droplet
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
@@ -246,6 +246,57 @@ function GitConfigSection() {
   )
 }
 
+function DoConfigSection() {
+  const [open, setOpen] = useState(true)
+  const [form, setForm] = useState({ token: '' })
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    window.api.deploy.getDoConfig().then(res => {
+      if (res) setForm(res)
+    })
+  }, [])
+
+  const handleSave = async () => {
+    setIsLoading(true)
+    try {
+      const payload = {
+        token: form.token.trim()
+      }
+      const res = await window.api.deploy.saveDoConfig(payload)
+      if (res.ok) toast.success('DigitalOcean config saved')
+      else toast.error(res?.error ?? 'Failed to save DO config')
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div>
+      <SectionHeader icon={Droplet} label="DigitalOcean Configuration" open={open} onToggle={() => setOpen(o => !o)} />
+      {open && (
+        <div className="py-4 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-text-muted mb-1.5">Personal Access Token (API Key)</label>
+            <ApiKeyInput value={form.token} label="DO Token" placeholder="dop_v1_..."
+               onChange={v => setForm({ token: v })}
+               onDelete={() => setForm({ token: '' })} />
+            <p className="text-[10px] text-text-dim mt-1.5">Used for authenticating when managing firewalls on DigitalOcean.</p>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button onClick={handleSave} disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-2 text-xs bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg font-medium transition-colors">
+              Save Config
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 
 export default function SettingsPage() {
   const { user, isLoading, aiConfig, login, logout, saveAiConfig, testAi } = useAuthStore()
@@ -265,6 +316,9 @@ export default function SettingsPage() {
           </div>
           <div className="pt-2">
             <GitConfigSection />
+          </div>
+          <div className="pt-2">
+            <DoConfigSection />
           </div>
         </div>
 

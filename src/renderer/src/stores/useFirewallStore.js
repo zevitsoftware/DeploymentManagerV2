@@ -115,11 +115,14 @@ const useFirewallStore = create((set, get) => ({
         let res
         const prov = (target.provider ?? '').toLowerCase()
         if (prov === 'gcp') {
-          res = await api().firewall.updateGcp({ projectId: target.project ?? target.projectId, ruleName: target.ruleNames?.[0] ?? target.ruleName, ips })
+          const ruleName = target.firewallName || target.ruleNames?.[0] || target.ruleName
+          res = await api().firewall.updateGcp({ projectId: target.project || target.projectId, ruleName, ips })
         } else if (prov === 'gcpsql') {
-          res = await api().firewall.updateGcpSQL({ projectId: target.project ?? target.projectId, instanceName: target.firewallName ?? target.sqlInstance, ifaces: interfaces.map(i => ({ label: i.name, publicIP: i.publicIp })) })
+          const instanceName = target.firewallName || target.sqlInstance || target.ruleName || target.ruleNames?.[0]
+          res = await api().firewall.updateGcpSQL({ projectId: target.project || target.projectId, instanceName, ifaces: interfaces.map(i => ({ label: i.name, publicIP: i.publicIp })) })
         } else if (prov === 'do') {
-          res = await api().firewall.updateDo({ firewallId: target.firewallId ?? target.firewallName, token: target.doToken ?? target.token, ips })
+          const firewallId = target.firewallId || target.firewallName
+          res = await api().firewall.updateDo({ firewallId, token: target.doToken || target.token, ips })
         } else if (prov === 'atlas') {
           res = await api().firewall.updateAtlas({ publicKey: target.atlasPublicKey, privateKey: target.atlasPrivateKey, groupId: target.atlasGroupId, ips, comment: `Auto-update ${tDesc}` })
         }

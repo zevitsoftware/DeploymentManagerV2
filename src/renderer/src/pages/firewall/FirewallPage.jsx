@@ -318,9 +318,9 @@ export default function FirewallPage() {
                 const prov = FW_PROVIDERS[provKey] ?? { label: t.provider, color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' }
                 const isSelected = selectedIds.includes(t.id)
                 // Support both V1 field names (desc, projectId, ruleName) and V2 (description, project, firewallName)
-                const desc    = t.description ?? t.desc ?? ''
-                const project = t.project ?? t.projectId ?? ''
-                const fwName  = t.firewallName ?? t.ruleName ?? t.sqlInstance ?? t.firewallId ?? ''
+                const desc    = t.description || t.desc || ''
+                const project = t.project || t.projectId || ''
+                const fwName  = t.firewallName || t.ruleName || t.sqlInstance || t.firewallId || ''
                 return (
                   <tr key={t.id} className={isSelected ? 'selected' : ''}>
                     <td>

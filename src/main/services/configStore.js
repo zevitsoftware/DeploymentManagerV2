@@ -115,6 +115,23 @@ function getGitConfig() {
     return config.git ?? { username: '', token: '' };
 }
 
+/**
+ * Get DigitalOcean global config (token).
+ * Falls back to extracting the token from existing DO firewall targets
+ * if no global digitalocean config has been saved yet.
+ */
+function getDoConfig() {
+    const config = readFullConfig();
+    if (config.digitalocean?.token) {
+        return config.digitalocean;
+    }
+    // Fallback: find token from existing DO firewall targets
+    const firewalls = config.firewalls ?? [];
+    const doTarget = firewalls.find(t => (t.provider ?? '').toLowerCase() === 'do');
+    const fallbackToken = doTarget?.doToken || doTarget?.token || '';
+    return { token: fallbackToken };
+}
+
 // ─── Exports ───────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -131,4 +148,5 @@ module.exports = {
     getServers,
     findServer,
     getGitConfig,
+    getDoConfig,
 };

@@ -117,6 +117,7 @@ function registerFirewallHandlers(ipcMain) {
   })
 
   ipcMain.handle(ch.FW_UPDATE_GCP, async (e, { projectId, ruleName, ips }) => {
+    if (!projectId || !ruleName) return { ok: false, error: 'Missing projectId or ruleName' }
     const wanted = ips.map(ip => ip.includes('/') ? ip : ip + '/32')
     try {
       const descOut = await run('gcloud.cmd', ['compute', 'firewall-rules', 'describe', ruleName, '--project=' + projectId, '--format=json'])
@@ -132,6 +133,7 @@ function registerFirewallHandlers(ipcMain) {
   })
 
   ipcMain.handle(ch.FW_UPDATE_GCPSQL, async (e, { projectId, instanceName, ifaces }) => {
+    if (!projectId || !instanceName) return { ok: false, error: 'Missing projectId or instanceName for GCPSQL update' }
     try {
       const descOut = await run('gcloud.cmd', ['sql', 'instances', 'describe', instanceName, '--project=' + projectId, '--format=json'], 30000)
       const inst    = JSON.parse(descOut)
@@ -166,24 +168,35 @@ function registerFirewallHandlers(ipcMain) {
   // ── DigitalOcean ──────────────────────────────────────────────────────────
   ipcMain.handle(ch.FW_GET_DO_ACCOUNT, async (e, token) => {
     try {
-      const { data } = await axios.get('https://api.digitalocean.com/v2/account', { headers: { Authorization: 'Bearer ' + token } })
+      const actualToken = token || readFullConfig().digitalocean?.token;
+      const { data } = await axios.get('https://api.digitalocean.com/v2/account', { headers: { Authorization: 'Bearer ' + actualToken } })
       return { ok: true, email: data.account?.email, uuid: data.account?.uuid }
     } catch (err) { return { ok: false, error: err.response?.data?.message || err.message } }
   })
 
   ipcMain.handle(ch.FW_LIST_DO_FIREWALLS, async (e, token) => {
     try {
-      const { data } = await axios.get('https://api.digitalocean.com/v2/firewalls?per_page=50', { headers: { Authorization: 'Bearer ' + token } })
+      const actualToken = token || readFullConfig().digitalocean?.token;
+      const { data } = await axios.get('https://api.digitalocean.com/v2/firewalls?per_page=50', { headers: { Authorization: 'Bearer ' + actualToken } })
       return { ok: true, firewalls: (data.firewalls || []).map(fw => ({ id: fw.id, name: fw.name, dropletCount: (fw.droplet_ids || []).length })) }
     } catch (err) { return { ok: false, error: err.response?.data?.message || err.message } }
   })
 
   ipcMain.handle(ch.FW_UPDATE_DO, async (e, { firewallId, token, ips }) => {
-    const headers    = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }
+    const actualToken = token || readFullConfig().digitalocean?.token;
+    const headers    = { Authorization: 'Bearer ' + actualToken, 'Content-Type': 'application/json' }
     const ALL_TRAFFIC = new Set(['0.0.0.0/0', '::/0'])
     const isAllTraffic = (rule) => { const addrs = rule.sources?.addresses || []; return addrs.length > 0 && addrs.every(a => ALL_TRAFFIC.has(a)) }
     try {
-      const { data }   = await axios.get(`https://api.digitalocean.com/v2/firewalls/${firewallId}`, { headers })
+      let fId = firewallId;
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fId)) {
+        const { data: listData } = await axios.get('https://api.digitalocean.com/v2/firewalls?per_page=100', { headers })
+        const found = (listData.firewalls || []).find(f => f.name === fId)
+        if (!found) return { ok: false, error: 'Firewall not found by name: ' + fId }
+        fId = found.id
+      }
+
+      const { data }   = await axios.get(`https://api.digitalocean.com/v2/firewalls/${fId}`, { headers })
       const fw         = data.firewall
       const affected   = fw.inbound_rules.filter(r => !isAllTraffic(r) && (r.sources?.addresses || []).length > 0)
       const allPresent = affected.every(rule => ips.every(ip => (rule.sources?.addresses || []).includes(ip)))
@@ -197,7 +210,7 @@ function registerFirewallHandlers(ipcMain) {
         return { ...rule, sources: { addresses: ips } }
       })
       const outboundRules = fw.outbound_rules.map(r => ({ protocol: r.protocol, ports: r.ports, destinations: { addresses: r.destinations?.addresses || [] } }))
-      await axios.put(`https://api.digitalocean.com/v2/firewalls/${firewallId}`, { name: fw.name, inbound_rules: inboundRules, outbound_rules: outboundRules, droplet_ids: fw.droplet_ids || [], tags: fw.tags || [] }, { headers })
+      await axios.put(`https://api.digitalocean.com/v2/firewalls/${fId}`, { name: fw.name, inbound_rules: inboundRules, outbound_rules: outboundRules, droplet_ids: fw.droplet_ids || [], tags: fw.tags || [] }, { headers })
       return { ok: true, skipped: false, changes }
     } catch (err) { return { ok: false, error: err.response?.data?.message || err.message } }
   })
@@ -231,18 +244,30 @@ function registerFirewallHandlers(ipcMain) {
   ipcMain.handle(ch.FW_GET_ALLOWED_IPS, async (e, target) => {
     try {
       if (target.provider === 'GCP') {
-        const descOut = await run('gcloud.cmd', ['compute', 'firewall-rules', 'describe', target.ruleName, '--project=' + target.projectId, '--format=json'])
+        const ruleName = target.firewallName || target.ruleName || target.ruleNames?.[0]
+        if (!ruleName) throw new Error('Missing rule name')
+        const descOut = await run('gcloud.cmd', ['compute', 'firewall-rules', 'describe', ruleName, '--project=' + target.projectId, '--format=json'])
         const rule = JSON.parse(descOut)
         return { ok: true, ips: (rule.sourceRanges || []).map(ip => ({ ip, label: '' })) }
       }
       if (target.provider === 'GCPSQL') {
-        const descOut = await run('gcloud.cmd', ['sql', 'instances', 'describe', target.sqlInstance, '--project=' + target.projectId, '--format=json'])
+        const sqlInstance = target.firewallName || target.sqlInstance || target.ruleName || target.ruleNames?.[0]
+        if (!sqlInstance) throw new Error('Missing instance name')
+        const descOut = await run('gcloud.cmd', ['sql', 'instances', 'describe', sqlInstance, '--project=' + target.projectId, '--format=json'])
         const inst = JSON.parse(descOut)
         return { ok: true, ips: (inst.settings?.ipConfiguration?.authorizedNetworks || []).map(n => ({ ip: n.value, label: n.name || '' })) }
       }
       if (target.provider === 'DO') {
-        const headers = { Authorization: 'Bearer ' + target.token, 'Content-Type': 'application/json' }
-        const { data } = await axios.get(`https://api.digitalocean.com/v2/firewalls/${target.firewallId}`, { headers })
+        const actualToken = target.token || target.doToken || readFullConfig().digitalocean?.token;
+        const headers = { Authorization: 'Bearer ' + actualToken, 'Content-Type': 'application/json' }
+        let fId = target.firewallId || target.firewallName
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fId)) {
+          const { data: listData } = await axios.get('https://api.digitalocean.com/v2/firewalls?per_page=100', { headers })
+          const found = (listData.firewalls || []).find(f => f.name === fId)
+          if (!found) throw new Error('Firewall not found by name: ' + fId)
+          fId = found.id
+        }
+        const { data } = await axios.get(`https://api.digitalocean.com/v2/firewalls/${fId}`, { headers })
         const ips = []
         for (const rule of (data.firewall.inbound_rules || [])) for (const addr of (rule.sources?.addresses || [])) ips.push({ ip: addr, label: `TCP:${rule.ports}` })
         return { ok: true, ips }

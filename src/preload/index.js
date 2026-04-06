@@ -130,6 +130,8 @@ contextBridge.exposeInMainWorld('api', {
         deleteProject:   (serverId, projectId)          => invoke(ch.DEPLOY_DELETE_PROJECT, serverId, projectId),
         getGitConfig:    ()                             => invoke(ch.DEPLOY_GET_GIT_CONFIG),
         saveGitConfig:   (config)                       => invoke(ch.DEPLOY_SAVE_GIT_CONFIG, config),
+        getDoConfig:     ()                             => invoke(ch.DEPLOY_GET_DO_CONFIG),
+        saveDoConfig:    (config)                       => invoke(ch.DEPLOY_SAVE_DO_CONFIG, config),
 
         // ── SSH Connection ────────────────────────────────────────────────────
         connectServer:   (serverId)                     => invoke(ch.DEPLOY_CONNECT_SERVER, serverId),
