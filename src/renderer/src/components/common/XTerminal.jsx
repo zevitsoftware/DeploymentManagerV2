@@ -133,9 +133,8 @@ const XTerminal = forwardRef(function XTerminal({ className = '', style = {}, on
           return false
         }
         if (e.code === 'KeyV') {
-          navigator.clipboard.readText().then(text => {
-            onDataRef.current?.(text)
-          })
+          // Returning false stops xterm from processing Ctrl+V as \x16 (SYN character).
+          // This allows the browser to emit a native `paste` event which xterm handles correctly.
           return false
         }
       }

@@ -17,7 +17,7 @@ import {
   Terminal as TerminalIcon, Play, StopCircle, RefreshCw, Bot,
   Wifi, WifiOff, Globe, X, FileText, Upload, Download, FolderPlus,
   FilePlus, ToggleLeft, ToggleRight, Trash, Eye, EyeOff, ChevronLeft,
-  File, FolderOpen, Save, AlertTriangle, Copy, Check, Shield, ListTree, Activity, Scissors, Pause
+  File, FolderOpen, Save, AlertTriangle, Copy, Check, Shield, ListTree, Activity, Scissors, Pause, Edit2
 } from 'lucide-react'
 import { cn, formatBytes } from '../../lib/utils'
 import { DEPLOY_STEPS_PM2, DEPLOY_STEPS_STATIC } from '../../lib/constants'
@@ -974,8 +974,8 @@ function DeployStepDialog({ project, steps, onConfirm, onCancel }) {
 }
 
 // ─── Input Dialog (replaces window.prompt which is blocked in Electron) ───────
-function InputDialog({ title, placeholder, onConfirm, onCancel }) {
-  const [value, setValue] = useState('')
+function InputDialog({ title, placeholder, defaultValue = '', onConfirm, onCancel }) {
+  const [value, setValue] = useState(defaultValue)
   const inputRef = useRef(null)
   useEffect(() => { inputRef.current?.focus() }, [])
   return (
@@ -1607,6 +1607,16 @@ function FilesTab({ serverId, isConnected, projectPath }) {
     } catch (err) { toast.error(err.message) }
   }, [serverId, currentPath, loadDir])
 
+  const handleRename = useCallback(async (newName, entry) => {
+    if (!newName || newName === entry.name) return
+    const newPath = `${currentPath}/${newName}`.replace('//', '/')
+    try {
+      const res = await api().deploy.fileRename(serverId, entry.path, newPath)
+      if (res?.ok) { toast.success(`${entry.name} renamed`); loadDir(currentPath) }
+      else toast.error(res?.error ?? 'Failed to rename')
+    } catch (err) { toast.error(err.message) }
+  }, [serverId, currentPath, loadDir])
+
   const handleNewFile = useCallback(async (name) => {
     if (!name) return
     const newPath = `${currentPath}/${name}`.replace('//', '/')
@@ -1737,29 +1747,37 @@ function FilesTab({ serverId, isConnected, projectPath }) {
           {FILE_ICON(entry)}
           <span className="flex-1 text-xs font-mono text-text-primary truncate">{entry.name}</span>
           {entry.size > 0 && <span className="text-[10px] text-text-dim">{formatBytes(entry.size)}</span>}
-          {entry.type !== 'directory' && (
-            <div className="hidden group-hover:flex items-center gap-1">
-              <button onClick={e => { e.stopPropagation(); api().deploy.fileDownload(serverId, entry.path) }}
-                title="Download" className="p-1 text-text-dim hover:text-accent-deploy rounded">
-                <Download size={12} />
-              </button>
-              <button onClick={e => { e.stopPropagation(); handleDelete(entry) }}
-                title="Delete" className="p-1 text-text-dim hover:text-red-400 rounded">
-                <Trash size={12} />
-              </button>
-            </div>
-          )}
+          <div className="hidden group-hover:flex items-center gap-1">
+            <button onClick={e => { e.stopPropagation(); setInputDialog({ type: 'rename', entry }) }}
+              title="Rename" className="p-1 text-text-dim hover:text-blue-400 rounded">
+              <Edit2 size={12} />
+            </button>
+            {entry.type !== 'directory' && (
+              <>
+                <button onClick={e => { e.stopPropagation(); api().deploy.fileDownload(serverId, entry.path) }}
+                  title="Download" className="p-1 text-text-dim hover:text-accent-deploy rounded">
+                  <Download size={12} />
+                </button>
+                <button onClick={e => { e.stopPropagation(); handleDelete(entry) }}
+                  title="Delete" className="p-1 text-text-dim hover:text-red-400 rounded">
+                  <Trash size={12} />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       ))}
 
       {/* InputDialog for creating file/dir */}
       {inputDialog && (
         <InputDialog
-          title={inputDialog.type === 'dir' ? 'New Folder' : 'New File'}
-          placeholder={inputDialog.type === 'dir' ? 'folder-name' : 'filename.txt'}
+          title={inputDialog.type === 'dir' ? 'New Folder' : inputDialog.type === 'rename' ? 'Rename Entry' : 'New File'}
+          placeholder={inputDialog.type === 'dir' ? 'folder-name' : inputDialog.type === 'rename' ? 'new-name' : 'filename.txt'}
+          defaultValue={inputDialog.entry?.name || ''}
           onConfirm={(name) => {
             setInputDialog(null)
             if (inputDialog.type === 'dir') handleMkdir(name)
+            else if (inputDialog.type === 'rename') handleRename(name, inputDialog.entry)
             else handleNewFile(name)
           }}
           onCancel={() => setInputDialog(null)}

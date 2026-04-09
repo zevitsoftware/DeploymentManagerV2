@@ -130,3 +130,11 @@
 - [x] **Deploy Skipping Bug Fix** — Properly mapped the string step IDs provided by `DeployStepDialog` (e.g., `upload`) to numeric indices expected by the `DeployEngine.js` backend, enabling successful skipping of individual steps during deployment.
 - [x] **Empty Command Crash Fix** — Fixed a fatal Node.js crash during deploy (`The argument 'file' cannot be empty. Received ''`) caused by empty custom command inputs overriding default build commands. Added a filter to strip empty strings from `customCommands` payload before IPC transfer.
 - [x] **Static Progress Bar Fix** — Removed the extraneous `health_check` ("Verify Live") step from the `DEPLOY_STEPS_STATIC` frontend list, allowing static deploys to correctly reach 100% (4/4 steps) instead of halting at 80% with an eternally pending step.
+
+---
+
+## 2026-04-08
+
+### ✅ Deploy Tab — Bug Fixes
+- [x] **Terminal double paste** — Removed manual Ctrl+V interception in `XTerminal.jsx` because xterm natively handles browser paste events.
+- [x] **SFTP File Rename** — Implemented file and directory renaming in the `DeployPage.jsx` SFTP view. Added a new Edit button that triggers an InputDialog configured for renaming, which then uses the existing backend `api().deploy.fileRename`.
