@@ -90,7 +90,7 @@ const DEPLOY_TERMINAL_INPUT  = 'deploy:terminal-input'
 const DEPLOY_TERMINAL_RESIZE = 'deploy:terminal-resize'
 const DEPLOY_TERMINAL_CLOSE  = 'deploy:terminal-close'
 
-// ─── DEPLOY — NGINX (7 channels) ─────────────────────────────────────────────
+// ─── DEPLOY — NGINX (9 channels) ─────────────────────────────────────────────
 const DEPLOY_NGINX_DOMAINS        = 'deploy:nginx-domains'
 const DEPLOY_NGINX_ENABLE_DOMAIN  = 'deploy:nginx-enable-domain'
 const DEPLOY_NGINX_DISABLE_DOMAIN = 'deploy:nginx-disable-domain'
@@ -98,6 +98,8 @@ const DEPLOY_NGINX_REMOVE_DOMAIN  = 'deploy:nginx-remove-domain'
 const DEPLOY_NGINX_ADD_DOMAIN     = 'deploy:nginx-add-domain'
 const DEPLOY_NGINX_GET_CONFIG     = 'deploy:nginx-get-config'
 const DEPLOY_NGINX_SPLIT_CONFIG   = 'deploy:nginx-split-config'
+const DEPLOY_NGINX_AI_GENERATE    = 'deploy:nginx-ai-generate'   // AI config generation (no write)
+const DEPLOY_NGINX_RUN_CERTBOT    = 'deploy:nginx-run-certbot'   // Run certbot --nginx for SSL
 
 // ─── DEPLOY — FILE BROWSER (4 channels) ──────────────────────────────────────
 const DEPLOY_BROWSE_FILE       = 'deploy:browse-file'
@@ -267,6 +269,8 @@ module.exports = {
   DEPLOY_NGINX_ADD_DOMAIN,
   DEPLOY_NGINX_GET_CONFIG,
   DEPLOY_NGINX_SPLIT_CONFIG,
+  DEPLOY_NGINX_AI_GENERATE,
+  DEPLOY_NGINX_RUN_CERTBOT,
 
   // Deploy — File Browser
   DEPLOY_BROWSE_FILE,

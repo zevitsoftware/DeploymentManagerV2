@@ -170,6 +170,8 @@ contextBridge.exposeInMainWorld('api', {
         nginxAdd:        (serverId, fileName, content)  => invoke(ch.DEPLOY_NGINX_ADD_DOMAIN, serverId, fileName, content),
         nginxGetConfig:  (serverId, fileName)           => invoke(ch.DEPLOY_NGINX_GET_CONFIG, serverId, fileName),
         nginxSplit:      (serverId, fileName)           => invoke(ch.DEPLOY_NGINX_SPLIT_CONFIG, serverId, fileName),
+        nginxAiGenerate: (serverId, opts)               => invoke(ch.DEPLOY_NGINX_AI_GENERATE, serverId, opts),
+        nginxRunCertbot: (serverId, opts)               => invoke(ch.DEPLOY_NGINX_RUN_CERTBOT, serverId, opts),
 
         // ── Server Scanner ────────────────────────────────────────────────────
         scanProjects:    (serverId)                     => invoke(ch.DEPLOY_SCAN_PROJECTS, serverId),

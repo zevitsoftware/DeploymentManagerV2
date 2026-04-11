@@ -17,7 +17,7 @@ import {
   Terminal as TerminalIcon, Play, StopCircle, RefreshCw, Bot,
   Wifi, WifiOff, Globe, X, FileText, Upload, Download, FolderPlus,
   FilePlus, ToggleLeft, ToggleRight, Trash, Eye, EyeOff, ChevronLeft,
-  File, FolderOpen, Save, AlertTriangle, Copy, Check, Shield, ListTree, Activity, Scissors, Pause, Edit2
+  File, FolderOpen, Save, AlertTriangle, Copy, Check, Shield, ListTree, Activity, Scissors, Pause, Edit2, Wand2
 } from 'lucide-react'
 import { cn, formatBytes } from '../../lib/utils'
 import { DEPLOY_STEPS_PM2, DEPLOY_STEPS_STATIC } from '../../lib/constants'
@@ -1180,6 +1180,353 @@ function HealthPanel({ health, isLoading, onRefresh, onAiScan, isAiScanning, aiR
   )
 }
 
+// ─── Nginx AI Add Domain Modal ─────────────────────────────────────────────────────────────
+function NginxAiAddModal({ serverId, onSave, onClose }) {
+  // Stage: 'input' | 'generating' | 'preview' | 'certbot'
+  const [stage, setStage] = useState('input')
+  const [domain, setDomain] = useState('')
+  const [projectDir, setProjectDir] = useState('')
+  const [withWww, setWithWww] = useState(false)
+  const [enableAfterSave, setEnableAfterSave] = useState(true)
+
+  // Generation result
+  const [generatedConfig, setGeneratedConfig] = useState('')
+  const [suggestedFileName, setSuggestedFileName] = useState('')
+  const [aiProvider, setAiProvider] = useState('')
+  const [genLogs, setGenLogs] = useState([])
+  const [genError, setGenError] = useState(null)
+  const genLogRef = useRef(null)
+
+  // Apply state
+  const [applying, setApplying] = useState(false)
+
+  // Certbot stage
+  const [certbotEmail, setCertbotEmail] = useState('')
+  const [certbotRunning, setCertbotRunning] = useState(false)
+  const [certbotDone, setCertbotDone] = useState(false)
+
+  // Drive browser
+  const [showDirBrowser, setShowDirBrowser] = useState(false)
+
+  // Listen for AI generation log events streamed from backend
+  useEffect(() => {
+    if (stage !== 'generating') return
+    const handler = (_, line) => {
+      setGenLogs(prev => [...prev, line])
+      setTimeout(() => { if (genLogRef.current) genLogRef.current.scrollTop = genLogRef.current.scrollHeight }, 30)
+    }
+    const unsub = window.api.on('deploy:log', handler)
+    return () => { if (typeof unsub === 'function') unsub() }
+  }, [stage])
+
+  // ── Stage 1 → 2: generate ──────────────────────────────────────────────────
+  const handleGenerate = async () => {
+    if (!domain.trim()) { toast.warn('Domain is required.'); return }
+    if (!projectDir.trim()) { toast.warn('Project directory is required.'); return }
+    setGenLogs([])
+    setGenError(null)
+    setStage('generating')
+    try {
+      const res = await api().deploy.nginxAiGenerate(serverId, { domain: domain.trim(), projectDir: projectDir.trim(), withWww })
+      if (res?.ok === false) {
+        setGenError(res.error ?? 'AI generation failed.')
+        setStage('input')
+        return
+      }
+      setGeneratedConfig(res.generatedConfig ?? '')
+      setSuggestedFileName(res.suggestedFileName ?? `${domain.trim()}.conf`)
+      setAiProvider(`${res.provider ?? 'AI'} ${res.model ? '(' + res.model + ')' : ''}`)
+      setStage('preview')
+    } catch (err) {
+      setGenError(err.message)
+      setStage('input')
+    }
+  }
+
+  // ── Stage 3: apply config ──────────────────────────────────────────────────
+  const handleApply = async () => {
+    const name = suggestedFileName.trim()
+    if (!name) { toast.warn('Filename is required.'); return }
+    if (!generatedConfig.trim()) { toast.warn('Config content cannot be empty.'); return }
+    setApplying(true)
+    try {
+      const res = await api().deploy.nginxAdd(serverId, name, generatedConfig)
+      if (res?.ok === false) throw new Error(res.error)
+      if (enableAfterSave) {
+        const er = await api().deploy.nginxEnable(serverId, name)
+        if (er?.ok === false) throw new Error(er.error)
+      }
+      toast.success(`Domain "${name}" created${enableAfterSave ? ' and enabled' : ''}`)
+      onSave()
+      // Move to certbot stage
+      setStage('certbot')
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  // ── Stage 4: certbot ───────────────────────────────────────────────────────
+  const handleCertbot = async () => {
+    if (!certbotEmail.trim()) { toast.warn('Email is required for Let\'s Encrypt.'); return }
+    setCertbotRunning(true)
+    try {
+      const res = await api().deploy.nginxRunCertbot(serverId, { domain: domain.trim(), email: certbotEmail.trim(), withWww })
+      if (res?.ok === false) {
+        toast.error(res.error ?? 'Certbot failed.')
+      } else {
+        toast.success(`SSL provisioned for ${domain}! 🎉`)
+        setCertbotDone(true)
+      }
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setCertbotRunning(false)
+    }
+  }
+
+  const inputCls = 'w-full bg-bg-primary border border-border-base rounded-md px-3 py-2 text-sm text-text-primary focus:border-border-focus outline-none placeholder:text-text-dim font-mono'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 bg-bg-surface border border-purple-500/30 rounded-xl shadow-2xl w-full max-w-2xl mx-4 animate-slide-in max-h-[90vh] flex flex-col">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-base flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Wand2 size={16} className="text-purple-400" />
+            <h3 className="font-semibold text-text-primary">AI Add Domain</h3>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 font-semibold uppercase tracking-wider">Beta</span>
+          </div>
+          {/* Stage indicator */}
+          <div className="flex items-center gap-1.5 mr-4">
+            {[['input', '1', 'Input'], ['generating', '2', 'Analyze'], ['preview', '3', 'Preview'], ['certbot', '4', 'SSL']].map(([s, n, label]) => {
+              const stages = ['input', 'generating', 'preview', 'certbot']
+              const current = stages.indexOf(stage)
+              const idx = stages.indexOf(s)
+              const done = idx < current
+              const active = s === stage
+              return (
+                <span key={s} className="flex items-center gap-1">
+                  <span className={cn('w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center',
+                    done ? 'bg-green-500 text-white' : active ? 'bg-purple-500 text-white' : 'bg-bg-hover text-text-dim'
+                  )}>{done ? '✓' : n}</span>
+                  <span className={cn('text-[10px]', active ? 'text-purple-400' : 'text-text-dim')}>{label}</span>
+                  {s !== 'certbot' && <span className="text-text-dim text-[10px] mx-0.5">›</span>}
+                </span>
+              )
+            })}
+          </div>
+          <button onClick={onClose} className="text-text-muted hover:text-text-primary"><X size={16} /></button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+
+          {/* ── STAGE 1: Input ── */}
+          {stage === 'input' && (
+            <>
+              {genError && (
+                <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                  ❌ {genError}
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-text-muted mb-1">Domain <span className="text-red-400">*</span></label>
+                <input
+                  value={domain}
+                  onChange={e => setDomain(e.target.value)}
+                  placeholder="e.g. api.zevitsoft.com"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-text-muted mb-1">Project Directory <span className="text-red-400">*</span></label>
+                <div className="flex gap-1.5">
+                  <input
+                    value={projectDir}
+                    onChange={e => setProjectDir(e.target.value)}
+                    placeholder="e.g. /var/www/node/api.zevitsoft.com"
+                    className={cn(inputCls, 'flex-1 text-xs')}
+                  />
+                  <button type="button" onClick={() => setShowDirBrowser(v => !v)}
+                    className="px-2.5 text-xs text-text-muted border border-border-base rounded-md hover:text-text-primary hover:bg-bg-hover flex-shrink-0">📂</button>
+                </div>
+                {showDirBrowser && (
+                  <ServerDirBrowser
+                    serverId={serverId}
+                    initialPath={projectDir || '/var/www'}
+                    onSelect={p => { setProjectDir(p); setShowDirBrowser(false) }}
+                    onClose={() => setShowDirBrowser(false)}
+                  />
+                )}
+                <p className="text-[10px] text-text-dim mt-1">
+                  Tip: For Node.js apps use <code className="bg-bg-primary px-1 rounded">/var/www/node/…</code>; for static sites use <code className="bg-bg-primary px-1 rounded">/var/www/html/…/public</code>
+                </p>
+              </div>
+              <div className="flex items-center gap-6">
+                <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer select-none">
+                  <input type="checkbox" checked={withWww} onChange={e => setWithWww(e.target.checked)} className="accent-purple-500" />
+                  Include <code className="bg-bg-primary px-1 rounded">www.{domain || 'domain'}</code> alias
+                </label>
+                <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer select-none">
+                  <input type="checkbox" checked={enableAfterSave} onChange={e => setEnableAfterSave(e.target.checked)} className="accent-purple-500" />
+                  Enable domain after apply
+                </label>
+              </div>
+              <div className="flex items-start gap-2 px-3 py-2 rounded-lg border border-blue-500/20 bg-blue-500/5">
+                <Bot size={13} className="text-blue-400 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] text-text-muted">
+                  AI will read your existing Nginx configs as style references, detect PM2 ports, and generate a production-ready config for review. Nothing is written until you click <strong className="text-text-primary">Apply</strong>.
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* ── STAGE 2: Generating ── */}
+          {stage === 'generating' && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-purple-400">
+                <Bot size={16} className="animate-pulse" />
+                <span>AI is analyzing your server and generating the config…</span>
+              </div>
+              <div ref={genLogRef} className="bg-[#06090f] rounded-lg border border-border-base p-3 max-h-60 overflow-y-auto">
+                {genLogs.length === 0 ? (
+                  <p className="text-[11px] font-mono text-text-dim">Connecting…</p>
+                ) : (
+                  genLogs.map((line, i) => (
+                    <p key={i} className="text-[11px] font-mono text-text-muted leading-relaxed">{line}</p>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── STAGE 3: Preview / Edit ── */}
+          {stage === 'preview' && (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Check size={13} className="text-green-400" />
+                  <span className="text-xs text-green-400 font-medium">Config generated by {aiProvider}</span>
+                </div>
+                <button onClick={() => {
+                  setGenLogs([]); setGenError(null); setStage('input')
+                }} className="text-[11px] text-text-dim hover:text-text-primary flex items-center gap-1">
+                  <RefreshCw size={11} /> Regenerate
+                </button>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-text-muted mb-1">Filename (in sites-available)</label>
+                <input
+                  value={suggestedFileName}
+                  onChange={e => setSuggestedFileName(e.target.value)}
+                  className={cn(inputCls, 'text-xs')}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-text-muted mb-1">Generated Nginx Config — review and edit as needed</label>
+                <textarea
+                  value={generatedConfig}
+                  onChange={e => setGeneratedConfig(e.target.value)}
+                  spellCheck={false}
+                  className="w-full bg-[#0a0e14] border border-border-base rounded-md px-3 py-2 text-xs text-text-primary focus:border-border-focus outline-none font-mono resize-y leading-relaxed"
+                  style={{ minHeight: 260, tabSize: 4 }}
+                />
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer select-none">
+                  <input type="checkbox" checked={enableAfterSave} onChange={e => setEnableAfterSave(e.target.checked)} className="accent-purple-500" />
+                  Enable domain after applying
+                </label>
+              </div>
+            </>
+          )}
+
+          {/* ── STAGE 4: Certbot SSL ── */}
+          {stage === 'certbot' && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-green-500/20 bg-green-500/5">
+                <Check size={13} className="text-green-400 flex-shrink-0" />
+                <span className="text-xs text-green-400 font-medium">Domain <strong>{suggestedFileName}</strong> created successfully!</span>
+              </div>
+              {!certbotDone ? (
+                <>
+                  <p className="text-sm text-text-primary font-medium">🔒 Optional: Provision SSL with Let's Encrypt</p>
+                  <p className="text-xs text-text-muted">
+                    Certbot will run <code className="bg-bg-primary px-1 rounded">certbot --nginx -d {domain}{withWww ? ` -d www.${domain}` : ''}</code> on your server.
+                    Make sure your DNS is pointing to this server first.
+                  </p>
+                  <div>
+                    <label className="block text-xs font-medium text-text-muted mb-1">Let's Encrypt Email <span className="text-red-400">*</span></label>
+                    <input
+                      value={certbotEmail}
+                      onChange={e => setCertbotEmail(e.target.value)}
+                      placeholder="admin@yourdomain.com"
+                      type="email"
+                      className={inputCls}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-3 rounded-lg border border-green-500/20 bg-green-500/5">
+                  <span className="text-green-400 text-lg">🎉</span>
+                  <div>
+                    <p className="text-sm text-green-400 font-semibold">SSL certificate provisioned!</p>
+                    <p className="text-xs text-text-muted mt-0.5">https://{domain} is now live.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer buttons */}
+        <div className="flex gap-2 justify-between items-center px-5 py-3 border-t border-border-base flex-shrink-0">
+          <button onClick={onClose} className="px-4 py-1.5 text-sm border border-border-base text-text-muted rounded-md hover:text-text-primary">Close</button>
+          <div className="flex gap-2">
+            {stage === 'input' && (
+              <button
+                onClick={handleGenerate}
+                disabled={!domain.trim() || !projectDir.trim()}
+                className="px-4 py-1.5 text-sm bg-purple-600 hover:bg-purple-500 text-white rounded-md font-medium flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+              >
+                <Wand2 size={13} /> Generate Config
+              </button>
+            )}
+            {stage === 'preview' && (
+              <button
+                onClick={handleApply}
+                disabled={applying || !generatedConfig.trim() || !suggestedFileName.trim()}
+                className="px-4 py-1.5 text-sm bg-accent-deploy hover:bg-green-600 text-white rounded-md font-medium flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+              >
+                {applying ? <><LoadingSpinner size={11} color="white" />Applying…</> : <><Save size={13} />Apply Config</>}
+              </button>
+            )}
+            {stage === 'certbot' && !certbotDone && (
+              <>
+                <button onClick={() => { onSave(); onClose() }} className="px-3 py-1.5 text-sm border border-border-base text-text-muted rounded-md hover:text-text-primary">Skip SSL</button>
+                <button
+                  onClick={handleCertbot}
+                  disabled={certbotRunning || !certbotEmail.trim()}
+                  className="px-4 py-1.5 text-sm bg-teal-600 hover:bg-teal-500 text-white rounded-md font-medium flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                >
+                  {certbotRunning ? <><LoadingSpinner size={11} color="white" />Running…</> : <>🔒 Run Certbot</>}
+                </button>
+              </>
+            )}
+            {stage === 'certbot' && certbotDone && (
+              <button onClick={() => { onSave(); onClose() }} className="px-4 py-1.5 text-sm bg-accent-deploy text-white rounded-md font-medium">Done</button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Nginx Config Modal (Add + Edit — unified like V1) ────────────────────────
 function NginxConfigModal({ serverId, editDomain, onSave, onClose }) {
   const isEdit = !!editDomain
@@ -1331,6 +1678,7 @@ function NginxTab({ serverId, isConnected }) {
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(null)
   const [showConfigModal, setShowConfigModal] = useState(false) // true for add, domain object for edit
+  const [showAiModal, setShowAiModal] = useState(false)         // AI Add Domain wizard
   const [confirmAction, setConfirmAction] = useState(null) // { type, domain }
   const [splitting, setSplitting] = useState(null) // fileName being split
 
@@ -1486,6 +1834,15 @@ function NginxTab({ serverId, isConnected }) {
             )}
           </div>
         </>
+      )}
+
+      {/* AI Add Domain Modal */}
+      {showAiModal && (
+        <NginxAiAddModal
+          serverId={serverId}
+          onSave={load}
+          onClose={() => setShowAiModal(false)}
+        />
       )}
 
       {/* Nginx Config Modal (Add / Edit) */}

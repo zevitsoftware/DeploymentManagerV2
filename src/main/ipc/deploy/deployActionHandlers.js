@@ -558,6 +558,202 @@ function registerHandlers(ipcMain, win, sshManager) {
 
         return await analyze(prompt, { maxTokens: 4096 });
     });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Feature: AI Nginx Config Generator
+    // Reads existing server configs as style reference, calls AI to generate
+    // a new nginx server block. Returns the config for user review — does NOT
+    // write anything to the server. Apply is done via existing nginxAdd handler.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    ipcMain.handle('deploy:nginx-ai-generate', async (e, serverId, { domain, projectDir, withWww }) => {
+        try {
+            if (!sshManager.isConnected(serverId)) {
+                return { ok: false, error: 'Server not connected.' };
+            }
+            if (!domain || !domain.trim()) return { ok: false, error: 'Domain is required.' };
+            if (!projectDir || !projectDir.trim()) return { ok: false, error: 'Project directory is required.' };
+
+            const { scanNginxDomains, getDomainConfig } = require('../../services/nginxParser');
+            const { analyze } = require('../../services/aiProvider');
+            const srvCfg = resolveServer(serverId);
+            const sudoPassword = srvCfg?.sudoPassword ?? '';
+
+            // ── Step 1: Scan existing domains to pick reference configs ──────────
+            sendLog('🔍 [AI Nginx] Scanning existing Nginx configurations…', '');
+            let refConfigs = [];
+            try {
+                const { enabled, available } = await scanNginxDomains(serverId, sshManager);
+                const allDomains = [...enabled, ...available];
+
+                // Pick up to 3 reference files — prefer proxy_pass configs (node apps)
+                // since most new domains are node backends, otherwise fall back to any
+                const isNodePath = /\/(node|app|api|backend|service)\//i.test(projectDir);
+                const preferred = isNodePath
+                    ? allDomains.filter(d => d.proxyPass)
+                    : allDomains.filter(d => d.root);
+                const fallback = allDomains.filter(d => !preferred.includes(d));
+                const picks = [...preferred, ...fallback].slice(0, 3);
+
+                // ── Step 2: Read raw config content of each reference file ────────
+                sendLog(`📂 [AI Nginx] Reading ${picks.length} reference config(s) for style analysis…`, '');
+                for (const d of picks) {
+                    try {
+                        const raw = await getDomainConfig(serverId, sshManager, d.fileName);
+                        if (raw && raw.trim()) {
+                            refConfigs.push({ fileName: d.fileName, content: raw.trim() });
+                        }
+                    } catch { /* skip unreadable files */ }
+                }
+            } catch (scanErr) {
+                sendLog(`⚠️ [AI Nginx] Could not scan existing configs: ${scanErr.message}`, '');
+            }
+
+            // ── Step 3: Get PM2 running services to suggest correct port ─────────
+            sendLog('⚡ [AI Nginx] Checking PM2 services for port detection…', '');
+            let pm2Info = '';
+            try {
+                const pm2Result = await sshManager.exec(serverId, 'pm2 jlist 2>/dev/null');
+                if (pm2Result.stdout && pm2Result.stdout.startsWith('[')) {
+                    const pm2Procs = JSON.parse(pm2Result.stdout);
+                    if (pm2Procs.length > 0) {
+                        // Try to match by project dir path
+                        const matched = pm2Procs.find(p => {
+                            const cwd = p.pm2_env?.cwd ?? p.cwd ?? '';
+                            return cwd && projectDir.includes(cwd.split('/').pop() ?? '');
+                        });
+                        const runningList = pm2Procs
+                            .filter(p => p.pm2_env?.status === 'online')
+                            .map(p => {
+                                const port = p.pm2_env?.env?.PORT ?? p.pm2_env?.PORT ?? p.pm2_env?.env?.port ?? '';
+                                return `  - ${p.name} (cwd: ${p.pm2_env?.cwd ?? '?'})${port ? `, PORT: ${port}` : ''}`;
+                            }).join('\n');
+                        pm2Info = `Running PM2 apps:\n${runningList}`;
+                        if (matched) {
+                            const matchedPort = matched.pm2_env?.env?.PORT ?? matched.pm2_env?.PORT ?? matched.pm2_env?.env?.port ?? '';
+                            if (matchedPort) {
+                                pm2Info += `\n\nIMPORTANT: "${matched.name}" appears to match the project directory. Its port is: ${matchedPort}`;
+                            }
+                        }
+                    }
+                }
+            } catch { /* PM2 not installed — skip */ }
+
+            // ── Step 4: Build AI prompt ──────────────────────────────────────────
+            sendLog('🤖 [AI Nginx] Generating config with AI…', '');
+
+            const refSection = refConfigs.length > 0
+                ? refConfigs.map((r, i) => `--- Reference Config ${i + 1}: ${r.fileName} ---\n${r.content}`).join('\n\n')
+                : '(No existing configs found on this server — use standard production nginx patterns)';
+
+            const wwwNote = withWww
+                ? `Also add "www.${domain}" as a server_name alias.`
+                : `Do NOT add www. alias.`;
+
+            const prompt = [
+                'You are an expert Nginx server administrator. Generate a production-ready Nginx virtual host configuration.',
+                '',
+                `DOMAIN: ${domain}`,
+                `PROJECT DIRECTORY: ${projectDir}`,
+                '',
+                'EXISTING SERVER CONFIG PATTERNS (match the exact code style, indentation, and header comment format):',
+                refSection,
+                '',
+                pm2Info ? `PM2 SERVICE INFORMATION:\n${pm2Info}` : '',
+                '',
+                'STRICT RULES (follow all of them):',
+                '1. Output ONLY the raw Nginx server block(s). No markdown. No explanation. No ```nginx fences.',
+                '2. Detection logic for config type:',
+                '   - If projectDir contains /node/, /app/, /api/, /backend/, /service/ → generate reverse proxy config using proxy_pass.',
+                '   - If projectDir contains /html/, /public/, /www/, /static/ → generate static file config using root + try_files.',
+                '   - Otherwise, if a matching PM2 port was found → use proxy_pass. Default to proxy_pass with port 3000.',
+                '3. For proxy_pass configs: include proxy_set_header Host $host; X-Real-IP $remote_addr; X-Forwarded-For $proxy_add_x_forwarded_for; X-Forwarded-Proto $scheme.',
+                '4. For static configs: include try_files $uri $uri/ =404; and basic gzip settings.',
+                '5. Generate HTTP only (port 80 only). Do NOT include any SSL or HTTPS blocks — certbot will handle that separately.',
+                `6. ${wwwNote}`,
+                '7. If a matching PM2 port was detected, use it in proxy_pass. Otherwise use 3000 and add a comment: # TODO: verify port.',
+                '8. Match the EXACT indentation style from the reference configs (spaces vs tabs, 2 vs 4 spaces).',
+                '9. If no reference configs exist, use 4-space indentation with standard production headers.',
+            ].filter(s => s !== '').join('\n');
+
+            const aiResult = await analyze(prompt, { maxTokens: 1024 });
+
+            if (!aiResult?.ok) {
+                return { ok: false, error: aiResult?.error ?? 'AI generation failed.' };
+            }
+
+            // ── Step 5: Clean up AI response (strip any markdown fences if present) ──
+            let generatedConfig = (aiResult.summary ?? aiResult.content ?? '').trim();
+            // Strip ```nginx ... ``` or ``` ... ``` wrappers if AI included them
+            generatedConfig = generatedConfig
+                .replace(/^```(?:nginx|conf|nginx-conf)?\s*/i, '')
+                .replace(/\s*```\s*$/, '')
+                .trim();
+
+            // ── Step 6: Suggest a filename ────────────────────────────────────────
+            const cleanDomain = domain.trim().toLowerCase().replace(/[^a-z0-9.-]/g, '');
+            const suggestedFileName = `${cleanDomain}.conf`;
+
+            sendLog(`✅ [AI Nginx] Config generated successfully (${generatedConfig.split('\n').length} lines).`, '');
+
+            return {
+                ok: true,
+                generatedConfig,
+                suggestedFileName,
+                provider: aiResult.provider,
+                model: aiResult.model,
+            };
+        } catch (err) {
+            return { ok: false, error: err.message };
+        }
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Feature: Run Certbot for SSL provisioning (optional post-apply step)
+    // Streams output line-by-line to EVT_DEPLOY_LOG for live display in UI.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    ipcMain.handle('deploy:nginx-run-certbot', async (e, serverId, { domain, email, withWww }) => {
+        try {
+            if (!sshManager.isConnected(serverId)) {
+                return { ok: false, error: 'Server not connected.' };
+            }
+            if (!domain || !domain.trim()) return { ok: false, error: 'Domain is required.' };
+            if (!email || !email.trim()) return { ok: false, error: 'Email is required for Let\'s Encrypt registration.' };
+
+            const srvCfg = resolveServer(serverId);
+            const sudoPassword = srvCfg?.sudoPassword ?? '';
+            const sudo = sudoPassword
+                ? `echo '${sudoPassword.replace(/'/g, "'\\''")}' | sudo -S`
+                : 'sudo';
+
+            const cleanDomain = domain.trim();
+            const cleanEmail = email.trim();
+            const domainFlags = withWww
+                ? `-d ${cleanDomain} -d www.${cleanDomain}`
+                : `-d ${cleanDomain}`;
+
+            const cmd = `${sudo} certbot --nginx ${domainFlags} --non-interactive --agree-tos -m ${cleanEmail} 2>&1`;
+
+            sendLog(`🔒 [Certbot] Starting SSL provisioning for ${cleanDomain}…`, '');
+            sendLog(`🔒 [Certbot] Running: certbot --nginx ${domainFlags} -m ${cleanEmail}`, '');
+
+            const result = await sshManager.exec(serverId, cmd);
+            const output = ((result.stdout ?? '') + (result.stderr ?? '')).trim();
+
+            output.split('\n').forEach(line => sendLog(`  ${line}`, ''));
+
+            if (result.code !== 0) {
+                sendLog('❌ [Certbot] SSL provisioning failed. Check output above.', '');
+                return { ok: false, error: `Certbot failed (exit ${result.code}). See deploy log for details.`, output };
+            }
+
+            sendLog(`🎉 [Certbot] SSL certificate successfully provisioned for ${cleanDomain}!`, '');
+            return { ok: true, output };
+        } catch (err) {
+            return { ok: false, error: err.message };
+        }
+    });
 }
 
 module.exports = { registerHandlers };
